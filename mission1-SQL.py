@@ -102,3 +102,48 @@ print(requete("""
     order by nb_vols asc
     limit 10
 """))
+
+# Question 4
+print('Question 4 :')
+
+print(requete("""
+    select a.name as depart, f.dest as destination, count(*) as nb_vols
+    from flights f
+    join airports a on a.faa = f.origin
+    where f.dest in ('IAH', 'HOU')
+    group by a.name, f.dest
+    order by nb_vols desc
+"""))
+
+print(requete("""
+    select a.name as depart, f.dest as destination, count(*) as nb_vols
+    from flights f
+    join airports a on a.faa = f.origin
+    where f.dest in ('IAH', 'HOU')
+    group by a.name, f.dest
+    order by nb_vols desc
+"""))
+
+print(requete("""
+    select count(*) as nb_vols,
+           count(distinct carrier) as nb_compagnies,
+           count(distinct tailnum) as nb_avions
+    from flights
+    where origin in ('JFK', 'LGA', 'EWR') and dest = 'SEA'
+"""))
+
+# Question 5
+print('Question 5 :')
+
+print(requete("select dest, count(*) as nb_vols_vers from flights group by dest order by nb_vols_vers desc"))
+
+print(requete("""
+    select distinct d.name as destination, o.name as origine, al.name as compagnie
+    from flights f
+    join airports d on d.faa = f.dest
+    join airports o on o.faa = f.origin
+    join airlines al on al.carrier = f.carrier
+    order by d.name, o.name, al.name
+"""))
+
+
