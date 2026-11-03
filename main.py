@@ -24,23 +24,81 @@ def requete(sql, params=None):
         return pd.DataFrame(cursor.fetchall(), columns=colonnes)
 
 
-# Exemple de requête :
+# Exemples de requête :
 print(requete("select origin, count(*) as nb_vols from flights group by origin order by nb_vols desc"))
 
-df = requete("""
+print(requete("""
     select d.name as destination, count(*) as nb_vols
     from flights f
     join airports d on d.faa = f.dest
     group by d.name
     order by nb_vols desc
     limit 10
-""")
-print(df)
+"""))
 
 
 # 1. Mission
 
 # Question 1
-print(requete("select count(*) as nb_aeroports from airports"))
-print(requete("select count(*) as nb_departs from airports"))
-print(requete("select count(*) as nb_ from airports"))
+print('Question 1 : ')
+
+print(requete("""
+    select
+        (select count(*) from airports) as nb_aeroports,
+        (select count(*) from flights) as nb_departs,
+        (select count(distinct dest) from flights) as nb_destinations,
+        (select count(*) from airports where dst = 'N') as nb_sans_heure_ete,
+        (select count(distinct tzone) from airports) as nb_fuseaux,
+        (select count(*) from airlines) as nb_compagnies,
+        (select count(*) from planes) as nb_avions
+"""))
+
+# Question 2
+print('Question 2 :')
+
+print(requete("""
+    select a.name as aeroport_plus_departs, count(*) as nb_vols
+    from flights f
+    join airports a on a.faa = f.origin
+    group by a.name
+    order by nb_vols desc
+    limit 1
+"""))
+
+print(requete("""
+    select a.name as destination, count(*) as nb_vols,
+           round(100.0 * count(*) / sum(count(*)) over (), 2) as pourcentage
+    from flights f
+    join airports a on a.faa = f.dest
+    group by a.name
+    order by nb_vols desc
+    limit 10
+"""))
+
+print(requete("""
+    select a.name as destination, count(*) as nb_vols,
+           round(100.0 * count(*) / sum(count(*)) over (), 2) as pourcentage
+    from flights f
+    join airports a on a.faa = f.dest
+    group by a.name
+    order by nb_vols asc
+    limit 10
+"""))
+
+print(requete("""
+    select f.tailnum, count(*) as nb_vols
+    from flights f
+    join planes p on p.tailnum = f.tailnum
+    group by f.tailnum
+    order by nb_vols desc
+    limit 10
+"""))
+
+print(requete("""
+    select p.model as avion, count(*) as nb_vols
+    from flights f
+    join planes p on p.tailnum = f.tailnum
+    group by p.model
+    order by nb_vols asc
+    limit 10
+"""))
