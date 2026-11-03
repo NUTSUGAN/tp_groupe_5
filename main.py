@@ -24,5 +24,23 @@ def requete(sql, params=None):
         return pd.DataFrame(cursor.fetchall(), columns=colonnes)
 
 
-æ
+# Exemple de requête :
+print(requete("select origin, count(*) as nb_vols from flights group by origin order by nb_vols desc"))
 
+df = requete("""
+    select d.name as destination, count(*) as nb_vols
+    from flights f
+    join airports d on d.faa = f.dest
+    group by d.name
+    order by nb_vols desc
+    limit 10
+""")
+print(df)
+
+
+# 1. Mission
+
+# Question 1
+print(requete("select count(*) as nb_aeroports from airports"))
+print(requete("select count(*) as nb_departs from airports"))
+print(requete("select count(*) as nb_ from airports"))
