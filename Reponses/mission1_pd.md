@@ -1,4 +1,4 @@
-# Mission 1 — Exploration des données
+# Mission 1 — Exploration des données (réalisé avec pandas par Joel)
 
 ## Question 1 — Combien y a-t-il d'aéroports, de compagnies, d'avions et de vols annulés ?
 
