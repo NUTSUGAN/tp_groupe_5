@@ -1,5 +1,7 @@
 # Projet trafic aérien : exploration de la base
 
+Application en ligne : [groupe-5.streamlit.app](https://groupe-5.streamlit.app/)
+
 Analyse des vols au départ de New York (JFK, LGA, EWR) en 2021. Les données sont hébergées dans une base Postgres sur Supabase, le script SQL s'y connecte pour lancer des requêtes, et le script pandas lit les fichiers du dossier `data/`.
 
 ## Installation
@@ -67,3 +69,4 @@ streamlit run app.py
 ```
 
 L'application s'ouvre dans le navigateur (http://localhost:8501).
+
