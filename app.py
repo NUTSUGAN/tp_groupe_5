@@ -366,3 +366,42 @@ with tab3:
         vols_filtres_web = vols_filtres_web[vols_filtres_web["dest"] == destination_web]
     if compagnie_web != "Toutes":
         vols_filtres_web = vols_filtres_web[vols_filtres_web["carrier"] == compagnie_web]
+
+    # Afficher les principaux indicateurs.
+    vols_arrives_web = vols_filtres_web[
+        ~vols_filtres_web["annule"] & vols_filtres_web["arr_delay"].notna()
+    ]
+    if len(vols_arrives_web) > 0:
+        taux_retard_web = vols_arrives_web["retard"].mean() * 100
+        retard_moyen_web = vols_arrives_web["arr_delay"].mean()
+    else:
+        taux_retard_web = 0
+        retard_moyen_web = 0
+
+    taux_annulation_web = vols_filtres_web["annule"].mean() * 100
+    colonne1_web, colonne2_web, colonne3_web, colonne4_web = st.columns(4)
+    colonne1_web.metric("Nombre de vols", len(vols_filtres_web))
+    colonne2_web.metric("Vols avec plus de 15 minutes de retard", f"{taux_retard_web:.1f}%")
+    colonne3_web.metric("Vols annulés", f"{taux_annulation_web:.1f}%")
+    colonne4_web.metric("Retard moyen à l'arrivée", f"{retard_moyen_web:.1f} min")
+
+    # Observer comment les retards changent selon le mois.
+    st.subheader("Retards par mois")
+    retards_par_mois_web = vols_filtres_web.groupby("month")["retard"].mean() * 100
+    st.line_chart(retards_par_mois_web.rename("Vols en retard (%)"))
+    st.subheader("Retards selon l'heure de départ")
+    retards_par_heure_web = vols_arrives_web.groupby("heure")["retard"].mean() * 100
+    st.bar_chart(retards_par_heure_web.rename("Vols en retard (%)"))
+
+    # Comparer les destinations et les compagnies selon leur taux de retard.
+    colonne_dest_web, colonne_compagnie_web = st.columns(2)
+    colonne_dest_web.subheader("Destinations où les retards sont fréquents")
+    retards_destinations_web = (
+        vols_arrives_web.groupby("dest")["retard"].mean().sort_values(ascending=False).head(10) * 100
+    )
+    colonne_dest_web.bar_chart(retards_destinations_web.rename("Vols en retard (%)"))
+    colonne_compagnie_web.subheader("Compagnies où les retards sont fréquents")
+    retards_compagnies_web = (
+        vols_arrives_web.groupby("carrier")["retard"].mean().sort_values(ascending=False).head(10) * 100
+    )
+    colonne_compagnie_web.bar_chart(retards_compagnies_web.rename("Vols en retard (%)"))
