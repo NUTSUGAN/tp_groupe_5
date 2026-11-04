@@ -24,7 +24,7 @@ def requete(sql, params=None):
         colonnes = [c[0] for c in cursor.description]
         return pd.DataFrame(cursor.fetchall(), columns=colonnes)
 
-tab1, tab2= st.tabs(["Panda", "SQL"])
+tab1, tab2, tab3 = st.tabs(["Panda", "SQL", "Mission 3 — Tableau de bord"])
 
 with tab1:
     # Charger les vols. Dans Excel, chaque ligne du CSV est rangée dans une seule cellule.
@@ -334,3 +334,108 @@ with tab2:
 
 
 
+with tab3:
+
+    st.header("Mission 3 — Tableau de bord pour aider à la décision")
+    st.write("Les indicateurs ci-dessous résument les vols observés en 2021.")
+
+    # Charger les informations utiles depuis la base déjà utilisée dans ce fichier.
+    vols_web = requete("""
+        select month, sched_dep_time, dep_time, arr_delay, origin, dest, carrier
+        from flights
+        where year = 2021
+    """)
+
+    # Créer une colonne pour l'heure et repérer les retards et les annulations.
+    vols_web["heure"] = (vols_web["sched_dep_time"] // 100).fillna(0).clip(0, 23).astype(int)
+    vols_web["annule"] = vols_web["dep_time"].isna()
+    vols_web["retard"] = vols_web["arr_delay"] > 15
+
+    # Filtrer les résultats par aéroport de départ.
+    origines_web = ["Tous"] + sorted(vols_web["origin"].dropna().unique())
+    origine_web = st.selectbox("Aéroport de départ — Mission 3", origines_web)
+    destinations_web = ["Toutes"] + sorted(vols_web["dest"].dropna().unique())
+    destination_web = st.selectbox("Destination — Mission 3", destinations_web)
+    compagnies_web = ["Toutes"] + sorted(vols_web["carrier"].dropna().unique())
+    compagnie_web = st.selectbox("Compagnie — Mission 3", compagnies_web)
+
+    vols_filtres_web = vols_web
+    if origine_web != "Tous":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["origin"] == origine_web]
+    if destination_web != "Toutes":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["dest"] == destination_web]
+    if compagnie_web != "Toutes":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["carrier"] == compagnie_web]
+
+    # Afficher les principaux indicateurs.
+    vols_arrives_web = vols_filtres_web[
+        ~vols_filtres_web["annule"] & vols_filtres_web["arr_delay"].notna()
+    ]
+    if len(vols_arrives_web) > 0:
+        taux_retard_web = vols_arrives_web["retard"].mean() * 100
+        retard_moyen_web = vols_arrives_web["arr_delay"].mean()
+    else:
+        taux_retard_web = 0
+        retard_moyen_web = 0
+
+    taux_annulation_web = vols_filtres_web["annule"].mean() * 100
+    colonne1_web, colonne2_web, colonne3_web, colonne4_web = st.columns(4)
+    colonne1_web.metric("Nombre de vols", len(vols_filtres_web))
+    colonne2_web.metric("Vols avec plus de 15 minutes de retard", f"{taux_retard_web:.1f}%")
+    colonne3_web.metric("Vols annulés", f"{taux_annulation_web:.1f}%")
+    colonne4_web.metric("Retard moyen à l'arrivée", f"{retard_moyen_web:.1f} min")
+
+    # Observer comment les retards changent selon le mois.
+    st.subheader("Retards par mois")
+    retards_par_mois_web = vols_filtres_web.groupby("month")["retard"].mean() * 100
+    st.line_chart(retards_par_mois_web.rename("Vols en retard (%)"))
+    st.subheader("Retards selon l'heure de départ")
+    retards_par_heure_web = vols_arrives_web.groupby("heure")["retard"].mean() * 100
+    st.bar_chart(retards_par_heure_web.rename("Vols en retard (%)"))
+
+    # Comparer les destinations et les compagnies selon leur taux de retard.
+    colonne_dest_web, colonne_compagnie_web = st.columns(2)
+    colonne_dest_web.subheader("Destinations où les retards sont fréquents")
+    retards_destinations_web = (
+        vols_arrives_web.groupby("dest")["retard"].mean().sort_values(ascending=False).head(10) * 100
+    )
+    colonne_dest_web.bar_chart(retards_destinations_web.rename("Vols en retard (%)"))
+    colonne_compagnie_web.subheader("Compagnies où les retards sont fréquents")
+    retards_compagnies_web = (
+        vols_arrives_web.groupby("carrier")["retard"].mean().sort_values(ascending=False).head(10) * 100
+    )
+    colonne_compagnie_web.bar_chart(retards_compagnies_web.rename("Vols en retard (%)"))
+
+    # Estimer les fréquences à partir des vols du même mois et de la même heure en 2021.
+    st.subheader("Comparer un vol avec les vols observés en 2021")
+    mois_noms_web = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    mois_choisi_web = st.selectbox("Mois du vol — Mission 3", mois_noms_web)
+    mois_numero_web = mois_noms_web.index(mois_choisi_web) + 1
+    heure_choisie_web = st.slider("Heure de départ prévue — Mission 3", 0, 23, 8)
+
+    vols_comparables_web = vols_filtres_web[
+        (vols_filtres_web["month"] == mois_numero_web)
+        & (vols_filtres_web["heure"] == heure_choisie_web)
+    ]
+
+    if len(vols_comparables_web) == 0:
+        st.write("Aucun vol comparable trouvé dans les données.")
+    else:
+        arrives_comparables_web = vols_comparables_web[
+            ~vols_comparables_web["annule"] & vols_comparables_web["arr_delay"].notna()
+        ]
+        if len(arrives_comparables_web) > 0:
+            taux_retard_comparable_web = arrives_comparables_web["retard"].mean() * 100
+        else:
+            taux_retard_comparable_web = 0
+
+        taux_annulation_comparable_web = vols_comparables_web["annule"].mean() * 100
+        st.write("Vols comparables trouvés :", len(vols_comparables_web))
+        st.write(f"Fréquence historique de retard : {taux_retard_comparable_web:.1f}%")
+        st.write(f"Fréquence historique d'annulation : {taux_annulation_comparable_web:.1f}%")
+
+        if len(vols_comparables_web) < 30:
+            st.warning("Il y a peu de vols comparables; ces fréquences sont à prendre avec prudence.")
+
+    st.caption("Cette comparaison utilise seulement les données de 2021 : elle ne prédit pas la météo ni les événements futurs.")
