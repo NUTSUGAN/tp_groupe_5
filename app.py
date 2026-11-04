@@ -1,140 +1,336 @@
-"""Mission 1 : explorer les vols avec pandas. Lancer depuis le dossier du projet."""
-
+import os
 import io
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
+import psycopg2
 
-# Charger les vols. Dans Excel, chaque ligne du CSV est rangée dans une seule cellule.
-colonne_vols = pd.read_excel("data/flights.xlsx", dtype=str).iloc[:, 0]
-texte_vols = "\n".join([colonne_vols.name] + colonne_vols.dropna().tolist())
-vols = pd.read_csv(io.StringIO(texte_vols), dtype=str)
-vols = vols.apply(lambda colonne: colonne.str.strip()).replace("", pd.NA)
+# Charge les variables d'environnement depuis .env
+load_dotenv()
 
-# Charger les informations de référence.
-aeroports = pd.read_excel("data/airports.xlsx").drop(columns="Unnamed: 0")
-compagnies = pd.read_json("data/airlines.json")
-avions = pd.read_html("data/planes.html")[0].drop(columns="Unnamed: 0")
+# Récupère l'URL de connexion
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise SystemExit("DATABASE_URL manquante : ajoute-la dans le fichier .env")
 
-# Les heures vides sont utiles pour repérer les vols annulés.
-vols["dep_time"] = pd.to_numeric(vols["dep_time"], errors="coerce")
+# Connexion à la base
+connection = psycopg2.connect(DATABASE_URL)
 
-# L'énoncé donne les noms de ces quatre aéroports absents du fichier airports.
-noms_manquants = pd.DataFrame({
-    "faa": ["BQN", "PSE", "SJU", "STT"],
-    "name": ["Rafael Hernandez Airport", "Mercedita Airport",
-             "San Juan Airport", "Cyril E. King Airport"]
-})
-aeroports = pd.concat([aeroports, noms_manquants], ignore_index=True)
+def requete(sql, params=None):
+    """Exécute une requête SQL et renvoie le résultat dans un tableau pandas."""
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        colonnes = [c[0] for c in cursor.description]
+        return pd.DataFrame(cursor.fetchall(), columns=colonnes)
+
+tab1, tab2= st.tabs(["Panda", "SQL"])
+
+with tab1:
+    # Charger les vols. Dans Excel, chaque ligne du CSV est rangée dans une seule cellule.
+    colonne_vols = pd.read_excel("data/flights.xlsx", dtype=str).iloc[:, 0]
+    texte_vols = "\n".join([colonne_vols.name] + colonne_vols.dropna().tolist())
+    vols = pd.read_csv(io.StringIO(texte_vols), dtype=str)
+    vols = vols.apply(lambda colonne: colonne.str.strip()).replace("", pd.NA)
+
+    # Charger les informations de référence.
+    aeroports = pd.read_excel("data/airports.xlsx").drop(columns="Unnamed: 0")
+    compagnies = pd.read_json("data/airlines.json")
+    avions = pd.read_html("data/planes.html")[0].drop(columns="Unnamed: 0")
+
+    # Les heures vides sont utiles pour repérer les vols annulés.
+    vols["dep_time"] = pd.to_numeric(vols["dep_time"], errors="coerce")
+
+    # L'énoncé donne les noms de ces quatre aéroports absents du fichier airports.
+    noms_manquants = pd.DataFrame({
+        "faa": ["BQN", "PSE", "SJU", "STT"],
+        "name": ["Rafael Hernandez Airport", "Mercedita Airport",
+                 "San Juan Airport", "Cyril E. King Airport"]
+    })
+    aeroports = pd.concat([aeroports, noms_manquants], ignore_index=True)
 
 
-def afficher(titre, resultat):
-    """Afficher un tableau dans Streamlit."""
-    st.subheader("\n" + titre)
-    st.dataframe(resultat, hide_index=True)
+    def afficher(titre, resultat):
+        """Afficher un tableau dans Streamlit."""
+        st.subheader(titre)
+        st.dataframe(resultat, hide_index=True)
 
 
-# 1. Comptages
-comptages = pd.DataFrame({
-    "Mesure": ["Aéroports référencés", "Origines", "Destinations", "Sans heure d'été",
-               "Fuseaux horaires", "Compagnies", "Avions dans le registre", "Vols annulés"],
-    "Nombre": [len(aeroports) - 4, vols["origin"].nunique(), vols["dest"].nunique(),
-               (aeroports["dst"] == "N").sum(), aeroports["tzone"].nunique(),
-               len(compagnies), len(avions), vols["dep_time"].isna().sum()]
-})
-afficher("Question 1 — Comptages", comptages)
+    st.header("Partie pandas")
 
-# 2. Origines, destinations et avions les plus et moins fréquents
-afficher("Question 2 — Vols par aéroport de départ",
-         vols["origin"].value_counts().rename_axis("Aéroport").reset_index(name="Vols"))
+    # 1. Comptages
+    comptages = pd.DataFrame({
+        "Mesure": ["Aéroports référencés", "Origines", "Destinations", "Sans heure d'été",
+                   "Fuseaux horaires", "Compagnies", "Avions dans le registre", "Vols annulés"],
+        "Nombre": [len(aeroports) - 4, vols["origin"].nunique(), vols["dest"].nunique(),
+                   (aeroports["dst"] == "N").sum(), aeroports["tzone"].nunique(),
+                   len(compagnies), len(avions), vols["dep_time"].isna().sum()]
+    })
+    afficher("Question 1 — Comptages", comptages)
 
-destinations = vols["dest"].value_counts().rename_axis("faa").reset_index(name="Vols")
-destinations = destinations.merge(aeroports[["faa", "name"]], on="faa", how="left")
-destinations["Pourcentage"] = (destinations["Vols"] / len(vols) * 100).round(2)
-destinations = destinations.rename(columns={"faa": "Code", "name": "Destination"})
-afficher("10 destinations les plus fréquentées", destinations.head(10))
-afficher("10 destinations les moins fréquentées",
-         destinations.sort_values("Vols").head(10))
+    # 2. Origines, destinations et avions les plus et moins fréquents
+    afficher("Question 2 — Vols par aéroport de départ",
+             vols["origin"].value_counts().rename_axis("Aéroport").reset_index(name="Vols"))
 
-vols_partis = vols[vols["dep_time"].notna()]
-departs = vols_partis["tailnum"].value_counts().rename_axis("Avion").reset_index(name="Départs")
-afficher("10 avions avec le plus de départs", departs.head(10))
-afficher("10 avions avec le moins de départs", departs.sort_values("Départs").head(10))
+    destinations = vols["dest"].value_counts().rename_axis("faa").reset_index(name="Vols")
+    destinations = destinations.merge(aeroports[["faa", "name"]], on="faa", how="left")
+    destinations["Pourcentage"] = (destinations["Vols"] / len(vols) * 100).round(2)
+    destinations = destinations.rename(columns={"faa": "Code", "name": "Destination"})
+    afficher("Question 2 — 10 destinations les plus fréquentées", destinations.head(10))
+    afficher("Question 2 — 10 destinations les moins fréquentées",
+             destinations.sort_values("Vols").head(10))
 
-# 3. Destinations desservies par compagnie
-par_compagnie = vols.groupby("carrier")["dest"].nunique().reset_index(name="Destinations")
-par_compagnie = par_compagnie.merge(compagnies, on="carrier", how="left")
-afficher("Destinations par compagnie", par_compagnie.sort_values("Destinations", ascending=False))
+    vols_partis = vols[vols["dep_time"].notna()]
+    departs = vols_partis["tailnum"].value_counts().rename_axis("Avion").reset_index(name="Départs")
+    afficher("Question 2 — 10 avions avec le plus de départs", departs.head(10))
+    afficher("Question 2 — 10 avions avec le moins de départs", departs.sort_values("Départs").head(10))
 
-par_origine = vols.groupby(["carrier", "origin"])["dest"].nunique().reset_index(name="Destinations")
-par_origine = par_origine.merge(compagnies, on="carrier", how="left")
-afficher("Destinations par compagnie et origine", par_origine)
+    # 3. Destinations desservies par compagnie
+    par_compagnie = vols.groupby("carrier")["dest"].nunique().reset_index(name="Destinations")
+    par_compagnie = par_compagnie.merge(compagnies, on="carrier", how="left")
+    afficher("Question 3 — Destinations par compagnie", par_compagnie.sort_values("Destinations", ascending=False))
 
-# 4. Vols vers Houston et Seattle
-houston = vols[vols["dest"].isin(["IAH", "HOU"])]
-print("\nQuestion 4 — Nombre de vols vers Houston :", len(houston))
-print("Aperçu des vols vers Houston :")
-print(houston.head().to_string(index=False))
+    par_origine = vols.groupby(["carrier", "origin"])["dest"].nunique().reset_index(name="Destinations")
+    par_origine = par_origine.merge(compagnies, on="carrier", how="left")
+    afficher("Question 3 — Destinations par compagnie et origine", par_origine)
 
-seattle = vols[(vols["dest"] == "SEA") & (vols["origin"].isin(["EWR", "JFK", "LGA"]))]
-resume_seattle = pd.DataFrame({
-    "Mesure": ["Vols", "Compagnies", "Avions uniques"],
-    "Nombre": [len(seattle), seattle["carrier"].nunique(), seattle["tailnum"].nunique()]
-})
-afficher("Vols de New York vers Seattle", resume_seattle)
+    # Question 3 : graphiques
+    st.subheader("Question 3 — Graphique : destinations par compagnie")
+    ax = par_compagnie.sort_values("Destinations").plot.barh(
+        x="name", y="Destinations", legend=False)
+    ax.set_xlabel("Nombre de destinations")
+    ax.figure.tight_layout()
+    st.pyplot(ax.figure)
 
-# 5. Nombre de vols par destination et tri alphabétique avec les noms
-afficher("Nombre de vols par destination", destinations.sort_values("Vols", ascending=False))
-vols_avec_noms = vols.merge(
-    aeroports[["faa", "name"]].rename(columns={"faa": "dest", "name": "Destination"}),
-    on="dest", how="left")
-vols_avec_noms = vols_avec_noms.merge(
-    aeroports[["faa", "name"]].rename(columns={"faa": "origin", "name": "Origine"}),
-    on="origin", how="left")
-vols_avec_noms = vols_avec_noms.merge(
-    compagnies.rename(columns={"name": "Compagnie"}), on="carrier", how="left")
-vols_tries = vols_avec_noms.sort_values(["Destination", "Origine", "Compagnie"])
-print("\nVols triés par destination, origine et compagnie — aperçu :")
-print(vols_tries.head().to_string(index=False))
+    st.subheader("Question 3 — Graphique : destinations par compagnie et origine")
+    ax = par_origine.pivot(index="carrier", columns="origin", values="Destinations").plot.bar()
+    ax.set_ylabel("Nombre de destinations")
+    ax.figure.tight_layout()
+    st.pyplot(ax.figure)
 
-# 6. Compagnies absentes d'une origine et compagnies couvrant toutes les destinations
-origines_compagnie = vols.groupby("carrier")["origin"].nunique()
-print("\nCompagnies qui n'opèrent pas depuis les trois aéroports :")
-print(origines_compagnie[origines_compagnie < 3].to_string())
+    # 4. Vols vers Houston et Seattle
+    houston = vols[vols["dest"].isin(["IAH", "HOU"])]
+    st.subheader("Question 4 — Vols vers Houston")
+    st.write("Nombre de vols vers Houston :", len(houston))
+    st.dataframe(houston.head(), hide_index=True)
 
-destinations_compagnie = vols.groupby("carrier")["dest"].nunique()
-print("\nCompagnies qui desservent toutes les destinations :")
-print(destinations_compagnie[destinations_compagnie == vols["dest"].nunique()].to_string())
+    seattle = vols[(vols["dest"] == "SEA") & (vols["origin"].isin(["EWR", "JFK", "LGA"]))]
+    resume_seattle = pd.DataFrame({
+        "Mesure": ["Vols", "Compagnies", "Avions uniques"],
+        "Nombre": [len(seattle), seattle["carrier"].nunique(), seattle["tailnum"].nunique()]
+    })
+    afficher("Question 4 — Vols de New York vers Seattle", resume_seattle)
 
-liaisons = vols.groupby(["carrier", "origin", "dest"]).size().reset_index(name="Vols")
-print("\nTableau des liaisons par compagnie, origine et destination — aperçu :")
-print(liaisons.head().to_string(index=False))
+    # 5. Nombre de vols par destination et tri alphabétique avec les noms
+    afficher("Question 5 — Nombre de vols par destination", destinations.sort_values("Vols", ascending=False))
+    vols_avec_noms = vols.merge(
+        aeroports[["faa", "name"]].rename(columns={"faa": "dest", "name": "Destination"}),
+        on="dest", how="left")
+    vols_avec_noms = vols_avec_noms.merge(
+        aeroports[["faa", "name"]].rename(columns={"faa": "origin", "name": "Origine"}),
+        on="origin", how="left")
+    vols_avec_noms = vols_avec_noms.merge(
+        compagnies.rename(columns={"name": "Compagnie"}), on="carrier", how="left")
+    vols_tries = vols_avec_noms.sort_values(["Destination", "Origine", "Compagnie"])
+    afficher("Question 5 — Vols triés par destination, origine et compagnie (aperçu)", vols_tries.head())
 
-# 7. Destinations desservies par une seule compagnie
-nb_compagnies = vols.groupby("dest")["carrier"].nunique()
-codes_exclusifs = nb_compagnies[nb_compagnies == 1].index
-exclusives = vols[vols["dest"].isin(codes_exclusifs)]
-exclusives = exclusives.groupby("dest").agg(
-    Compagnie=("carrier", "first"), Vols=("dest", "size")).reset_index()
-exclusives = exclusives.merge(
-    aeroports[["faa", "name"]].rename(columns={"faa": "dest", "name": "Destination"}),
-    on="dest", how="left")
-afficher("Question 7 — Destinations exclusives", exclusives.sort_values("Vols", ascending=False))
+    # 6. Compagnies absentes d'une origine et compagnies couvrant toutes les destinations
+    origines_compagnie = vols.groupby("carrier")["origin"].nunique()
+    afficher("Question 6 — Compagnies absentes d'une origine", origines_compagnie[origines_compagnie < 3].reset_index())
 
-# 8. Vols opérés par United (UA), American (AA) ou Delta (DL)
-trois_compagnies = vols[vols["carrier"].isin(["UA", "AA", "DL"])]
-resume = trois_compagnies.groupby("carrier").size().reset_index(name="Vols")
-resume = resume.merge(compagnies, on="carrier", how="left")
-afficher("Question 8 — Vols de United, American et Delta", resume)
+    destinations_compagnie = vols.groupby("carrier")["dest"].nunique()
+    afficher("Question 6 — Compagnies desservant toutes les destinations",
+             destinations_compagnie[destinations_compagnie == vols["dest"].nunique()].reset_index())
 
-# Afficher les graphiques à la fin, après les réponses dans le terminal.
-par_compagnie.sort_values("Destinations").plot.barh(
-    x="name", y="Destinations", legend=False, title="Destinations par compagnie")
-plt.xlabel("Nombre de destinations")
-plt.tight_layout()
+    liaisons = vols.groupby(["carrier", "origin", "dest"]).size().reset_index(name="Vols")
+    afficher("Question 6 — Liaisons par compagnie, origine et destination (aperçu)", liaisons.head())
 
-par_origine.pivot(index="carrier", columns="origin", values="Destinations").plot.bar(
-    title="Destinations par compagnie et aéroport de départ")
-plt.ylabel("Nombre de destinations")
-plt.tight_layout()
-plt.show()
+    # 7. Destinations desservies par une seule compagnie
+    nb_compagnies = vols.groupby("dest")["carrier"].nunique()
+    codes_exclusifs = nb_compagnies[nb_compagnies == 1].index
+    exclusives = vols[vols["dest"].isin(codes_exclusifs)]
+    exclusives = exclusives.groupby("dest").agg(
+        Compagnie=("carrier", "first"), Vols=("dest", "size")).reset_index()
+    exclusives = exclusives.merge(
+        aeroports[["faa", "name"]].rename(columns={"faa": "dest", "name": "Destination"}),
+        on="dest", how="left")
+    afficher("Question 7 — Destinations exclusives", exclusives.sort_values("Vols", ascending=False))
+
+    # 8. Vols opérés par United (UA), American (AA) ou Delta (DL)
+    trois_compagnies = vols[vols["carrier"].isin(["UA", "AA", "DL"])]
+    resume = trois_compagnies.groupby("carrier").size().reset_index(name="Vols")
+    resume = resume.merge(compagnies, on="carrier", how="left")
+    afficher("Question 8 — Vols de United, American et Delta", resume)
+
+with tab2:
+    # Partie SQL
+    st.header("Partie SQL")
+
+    afficher("Question 1 — Comptages généraux", requete("""
+        select
+            (select count(*) from airports) as nb_aeroports,
+            (select count(*) from flights) as nb_departs,
+            (select count(distinct dest) from flights) as nb_destinations,
+            (select count(*) from airports where dst = 'N') as nb_sans_heure_ete,
+            (select count(distinct tzone) from airports) as nb_fuseaux,
+            (select count(*) from airlines) as nb_compagnies,
+            (select count(*) from planes) as nb_avions
+    """))
+
+    afficher("Question 2 — Aéroport de départ le plus emprunté", requete("""
+        select a.name as aeroport_plus_departs, count(*) as nb_vols
+        from flights f
+        join airports a on a.faa = f.origin
+        group by a.name
+        order by nb_vols desc
+        limit 1
+    """))
+
+    afficher("Question 2 — 10 destinations les plus prisées", requete("""
+        select a.name as destination, count(*) as nb_vols,
+               round(100.0 * count(*) / sum(count(*)) over (), 2) as pourcentage
+        from flights f
+        join airports a on a.faa = f.dest
+        group by a.name
+        order by nb_vols desc
+        limit 10
+    """))
+
+    afficher("Question 2 — 10 destinations les moins prisées", requete("""
+        select a.name as destination, count(*) as nb_vols,
+               round(100.0 * count(*) / sum(count(*)) over (), 2) as pourcentage
+        from flights f
+        join airports a on a.faa = f.dest
+        group by a.name
+        order by nb_vols asc
+        limit 10
+    """))
+
+    afficher("Question 2 — 10 avions les plus actifs", requete("""
+        select f.tailnum, count(*) as nb_vols
+        from flights f
+        join planes p on p.tailnum = f.tailnum
+        group by f.tailnum
+        order by nb_vols desc
+        limit 10
+    """))
+
+    afficher("Question 2 — 10 modèles les moins actifs", requete("""
+        select p.model as avion, count(*) as nb_vols
+        from flights f
+        join planes p on p.tailnum = f.tailnum
+        group by p.model
+        order by nb_vols asc
+        limit 10
+    """))
+
+
+    afficher("Question 3 — Destinations par compagnie", requete("""
+        select al.name as compagnie, count(distinct f.dest) as nb_destinations
+        from airlines al
+        join flights f on f.carrier = al.carrier
+        group by al.name
+        order by nb_destinations desc
+    """))
+
+    afficher("Question 3 — Destinations par compagnie et origine", requete("""
+        select al.name as compagnie, f.origin, count(distinct f.dest) as nb_destinations
+        from airlines al
+        join flights f on f.carrier = al.carrier
+        group by al.name, f.origin
+        order by compagnie, f.origin
+    """))
+
+    afficher("Question 4 — Vols vers Houston", requete("""
+        select a.name as depart, f.dest as destination, count(*) as nb_vols
+        from flights f
+        join airports a on a.faa = f.origin
+        where f.dest in ('IAH', 'HOU')
+        group by a.name, f.dest
+        order by nb_vols desc
+    """))
+
+    afficher("Question 4 — Vols New York → Seattle", requete("""
+        select count(*) as nb_vols,
+               count(distinct carrier) as nb_compagnies,
+               count(distinct tailnum) as nb_avions
+        from flights
+        where origin in ('JFK', 'LGA', 'EWR') and dest = 'SEA'
+    """))
+
+    afficher("Question 5 — Nombre de vols par destination", requete("select dest, count(*) as nb_vols_vers from flights group by dest order by nb_vols_vers desc"))
+
+
+    afficher("Question 5 — Vols triés par destination", requete("""
+        select distinct d.name as destination, o.name as origine, al.name as compagnie
+        from flights f
+        join airports d on d.faa = f.dest
+        join airports o on o.faa = f.origin
+        join airlines al on al.carrier = f.carrier
+        order by d.name, o.name, al.name
+    """))
+
+    afficher("Question 6 — Compagnies absentes d'une origine", requete("""
+        select al.name as compagnie,
+               count(distinct f.origin) as nb_origines,
+               string_agg(distinct f.origin, ', ' order by f.origin) as origines
+        from airlines al
+        left join flights f on f.carrier = al.carrier
+        group by al.name
+        having count(distinct f.origin) < (select count(distinct origin) from flights)
+        order by nb_origines, compagnie
+    """))
+
+    afficher("Question 6 — Compagnies desservant toutes les destinations", requete("""
+        select al.name as compagnie, count(distinct f.dest) as nb_destinations
+        from airlines al
+        join flights f on f.carrier = al.carrier
+        group by al.name
+        having count(distinct f.dest) = (select count(distinct dest) from flights)
+    """))
+
+    afficher("Question 6 — Origines et destinations par compagnie", requete("""
+        select al.name as compagnie,
+               string_agg(distinct f.origin, ', ' order by f.origin) as origines,
+               count(distinct f.dest) as nb_destinations,
+               string_agg(distinct f.dest, ', ' order by f.dest) as destinations
+        from airlines al
+        left join flights f on f.carrier = al.carrier
+        group by al.name
+        order by nb_destinations desc, compagnie
+    """))
+
+    afficher("Question 7 — Destinations à compagnie unique", requete("""
+        select d.name as destination, max(al.name) as compagnie, count(*) as nb_vols
+        from flights f
+        join airports d on d.faa = f.dest
+        join airlines al on al.carrier = f.carrier
+        group by d.name
+        having count(distinct f.carrier) = 1
+        order by compagnie, destination
+    """))
+
+
+    afficher("Question 8 — Vols United, American et Delta", requete("""
+        select al.name as compagnie, count(*) as nb_vols
+        from flights f
+        join airlines al on al.carrier = f.carrier
+        where f.carrier in ('UA', 'AA', 'DL')
+        group by al.name
+        order by nb_vols desc
+    """))
+
+    afficher("Question 8 — 20 premiers vols United, American, Delta", requete("""
+        select al.name as compagnie, f.flight as num_vol, o.name as depart, d.name as arrivee,
+               f.year, f.month, f.day
+        from flights f
+        join airlines al on al.carrier = f.carrier
+        join airports o on o.faa = f.origin
+        join airports d on d.faa = f.dest
+        where f.carrier in ('UA', 'AA', 'DL')
+        order by f.year, f.month, f.day, f.dep_time
+        limit 20
+    """))
+
+
+
