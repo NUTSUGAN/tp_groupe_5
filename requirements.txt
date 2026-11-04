@@ -1,3 +1,7 @@
 pandas
 psycopg2-binary
 python-dotenv
+streamlit
+openpyxl
+lxml
+matplotlib

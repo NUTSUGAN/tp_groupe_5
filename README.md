@@ -1,6 +1,6 @@
 # Projet trafic aérien : exploration de la base
 
-Analyse des vols au départ de New York (JFK, LGA, EWR) en 2021. Les données sont hébergées dans une base Postgres sur Supabase, et le script Python s'y connecte pour lancer des requêtes SQL.
+Analyse des vols au départ de New York (JFK, LGA, EWR) en 2021. Les données sont hébergées dans une base Postgres sur Supabase, le script SQL s'y connecte pour lancer des requêtes, et le script pandas lit les fichiers du dossier `data/`.
 
 ## Installation
 
@@ -44,8 +44,26 @@ DATABASE_URL=postgresql://postgres.wvvbbaggdburoxpfymqz:MOT_DE_PASSE@aws-1-eu-ce
 - Pas de crochets, pas d'espaces, pas de guillemets.
 - Si le mot de passe contient des caractères spéciaux (`@`, `#`, `/`…), il faut les encoder dans l'URL.
 
-## Lancer le script
+## Lancer les scripts
+
+Tous les scripts se lancent depuis la racine du projet.
+
+Requêtes SQL (nécessite le fichier `.env`) :
 
 ```bash
-python main.py
+python mission1-SQL.py
 ```
+
+Requêtes pandas (lit les fichiers du dossier `data/`) :
+
+```bash
+python mission1_pd.py
+```
+
+## Afficher les résultats avec Streamlit
+
+```bash
+streamlit run app.py
+```
+
+L'application s'ouvre dans le navigateur (http://localhost:8501).
