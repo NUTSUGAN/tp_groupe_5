@@ -46,27 +46,31 @@ DATABASE_URL=postgresql://postgres.wvvbbaggdburoxpfymqz:MOT_DE_PASSE@aws-1-eu-ce
 - Pas de crochets, pas d'espaces, pas de guillemets.
 - Si le mot de passe contient des caractères spéciaux (`@`, `#`, `/`…), il faut les encoder dans l'URL.
 
-## Lancer les scripts
+## Structure du projet
 
-Tous les scripts se lancent depuis la racine du projet.
+- `exercices/` : les scripts de la mission 1 (`mission1-SQL.py` et `mission1_pd.py`), exécutés dans le terminal.
+- `app.py` : le front Streamlit qui affiche les résultats pandas et SQL dans deux onglets.
+- `data/` : les fichiers sources lus par pandas.
+- `reponses/` : les réponses rédigées.
+
+## Lancer les exercices
+
+Depuis la racine du projet (les chemins vers `data/` sont relatifs).
 
 Requêtes SQL (nécessite le fichier `.env`) :
 
 ```bash
-python mission1-SQL.py
+python exercices/mission1-SQL.py
 ```
 
-Requêtes pandas (lit les fichiers du dossier `data/`) :
+Requêtes pandas :
 
 ```bash
-python mission1_pd.py
+python exercices/mission1_pd.py
 ```
 
-## Afficher les résultats avec Streamlit
+## Lancer le front Streamlit
 
 ```bash
 streamlit run app.py
 ```
-
-L'application s'ouvre dans le navigateur (http://localhost:8501).
-
