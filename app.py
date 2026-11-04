@@ -405,3 +405,37 @@ with tab3:
         vols_arrives_web.groupby("carrier")["retard"].mean().sort_values(ascending=False).head(10) * 100
     )
     colonne_compagnie_web.bar_chart(retards_compagnies_web.rename("Vols en retard (%)"))
+
+    # Estimer les fréquences à partir des vols du même mois et de la même heure en 2021.
+    st.subheader("Comparer un vol avec les vols observés en 2021")
+    mois_noms_web = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    mois_choisi_web = st.selectbox("Mois du vol — Mission 3", mois_noms_web)
+    mois_numero_web = mois_noms_web.index(mois_choisi_web) + 1
+    heure_choisie_web = st.slider("Heure de départ prévue — Mission 3", 0, 23, 8)
+
+    vols_comparables_web = vols_filtres_web[
+        (vols_filtres_web["month"] == mois_numero_web)
+        & (vols_filtres_web["heure"] == heure_choisie_web)
+    ]
+
+    if len(vols_comparables_web) == 0:
+        st.write("Aucun vol comparable trouvé dans les données.")
+    else:
+        arrives_comparables_web = vols_comparables_web[
+            ~vols_comparables_web["annule"] & vols_comparables_web["arr_delay"].notna()
+        ]
+        if len(arrives_comparables_web) > 0:
+            taux_retard_comparable_web = arrives_comparables_web["retard"].mean() * 100
+        else:
+            taux_retard_comparable_web = 0
+
+        taux_annulation_comparable_web = vols_comparables_web["annule"].mean() * 100
+        st.write("Vols comparables trouvés :", len(vols_comparables_web))
+        st.write(f"Fréquence historique de retard : {taux_retard_comparable_web:.1f}%")
+        st.write(f"Fréquence historique d'annulation : {taux_annulation_comparable_web:.1f}%")
+
+        if len(vols_comparables_web) < 30:
+            st.warning("Il y a peu de vols comparables; ces fréquences sont à prendre avec prudence.")
+
+    st.caption("Cette comparaison utilise seulement les données de 2021 : elle ne prédit pas la météo ni les événements futurs.")
