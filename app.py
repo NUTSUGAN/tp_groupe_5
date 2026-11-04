@@ -24,7 +24,7 @@ def requete(sql, params=None):
         colonnes = [c[0] for c in cursor.description]
         return pd.DataFrame(cursor.fetchall(), columns=colonnes)
 
-tab1, tab2= st.tabs(["Panda", "SQL"])
+tab1, tab2, tab3 = st.tabs(["Panda", "SQL", "Mission 3 — Tableau de bord"])
 
 with tab1:
     # Charger les vols. Dans Excel, chaque ligne du CSV est rangée dans une seule cellule.
@@ -334,3 +334,35 @@ with tab2:
 
 
 
+with tab3:
+
+    st.header("Mission 3 — Tableau de bord pour aider à la décision")
+    st.write("Les indicateurs ci-dessous résument les vols observés en 2021.")
+
+    # Charger les informations utiles depuis la base déjà utilisée dans ce fichier.
+    vols_web = requete("""
+        select month, sched_dep_time, dep_time, arr_delay, origin, dest, carrier
+        from flights
+        where year = 2021
+    """)
+
+    # Créer une colonne pour l'heure et repérer les retards et les annulations.
+    vols_web["heure"] = (vols_web["sched_dep_time"] // 100).fillna(0).clip(0, 23).astype(int)
+    vols_web["annule"] = vols_web["dep_time"].isna()
+    vols_web["retard"] = vols_web["arr_delay"] > 15
+
+    # Filtrer les résultats par aéroport de départ.
+    origines_web = ["Tous"] + sorted(vols_web["origin"].dropna().unique())
+    origine_web = st.selectbox("Aéroport de départ — Mission 3", origines_web)
+    destinations_web = ["Toutes"] + sorted(vols_web["dest"].dropna().unique())
+    destination_web = st.selectbox("Destination — Mission 3", destinations_web)
+    compagnies_web = ["Toutes"] + sorted(vols_web["carrier"].dropna().unique())
+    compagnie_web = st.selectbox("Compagnie — Mission 3", compagnies_web)
+
+    vols_filtres_web = vols_web
+    if origine_web != "Tous":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["origin"] == origine_web]
+    if destination_web != "Toutes":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["dest"] == destination_web]
+    if compagnie_web != "Toutes":
+        vols_filtres_web = vols_filtres_web[vols_filtres_web["carrier"] == compagnie_web]
